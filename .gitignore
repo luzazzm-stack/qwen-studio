@@ -1,0 +1,17 @@
+# never commit: private settings created on each PC
+gateway/auth.json
+CREDENTIALS*
+app/endpoint.txt
+kernel/
+desktop/webview_data/
+desktop/chat_local.html
+desktop/shell_prefs.json
+desktop/*.log
+desktop/.kaggle_cfg/
+# build output
+desktop/app/
+desktop/dist-installer/
+desktop/build/
+installer/output/
+.venv/
+__pycache__/

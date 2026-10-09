@@ -1,0 +1,378 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Qwen Control</title>
+<style>
+:root{
+  --bg:#1c1a18; --panel:#22201d; --panel2:#2a2724; --panel3:#312d29;
+  --stroke:#38332e; --stroke2:#4a443c;
+  --fg:#ede8e1; --dim:#a8a096; --faint:#7a736a;
+  --amber:#d99b5c; --amber-lt:#e5c07b; --amber-dk:#b87f45; --on-amber:#241a0d;
+  --green:#a3c98a; --red:#e8836f;
+  --spring:cubic-bezier(.34,1.45,.5,1); --ease:cubic-bezier(.22,.8,.3,1);
+}
+/* Black & White — pure monochrome chrome to match the web UI's mono theme */
+html[data-theme="black"]{
+  --bg:#000; --panel:#0b0b0b; --panel2:#141414; --panel3:#1c1c1c;
+  --stroke:rgba(255,255,255,.14); --stroke2:rgba(255,255,255,.24);
+  --fg:#f5f5f5; --dim:#a6a6a6; --faint:#6e6e6e;
+  --amber:#fff; --amber-lt:#d4d4d4; --amber-dk:#bdbdbd; --on-amber:#000;
+  --green:#fff; --red:#fff;
+}
+html[data-theme="black"] #glow{display:none}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;overflow:hidden}
+body{background:var(--bg);color:var(--fg);
+  font:14px/1.55 "Segoe UI Variable","Segoe UI",system-ui,sans-serif;
+  display:flex;flex-direction:column;user-select:none}
+
+#glow{position:fixed;inset:0;pointer-events:none;overflow:hidden;z-index:0}
+#glow i{position:absolute;border-radius:50%;opacity:.5}
+#glow i:nth-child(1){width:340px;height:340px;top:-160px;left:-110px;
+  background:radial-gradient(circle,rgba(217,155,92,.30),transparent 62%);animation:d1 22s var(--ease) infinite alternate}
+#glow i:nth-child(2){width:300px;height:300px;bottom:-170px;right:-90px;
+  background:radial-gradient(circle,rgba(176,105,62,.24),transparent 62%);animation:d2 27s var(--ease) infinite alternate}
+@keyframes d1{to{transform:translate(50px,40px) scale(1.15)}}
+@keyframes d2{to{transform:translate(-40px,-30px) scale(1.1)}}
+body.expanded #glow{display:none}
+
+/* ---------------- app header (window chrome is native; this is just content) ---------------- */
+#bar{position:relative;z-index:2;flex:none;display:flex;align-items:center;gap:8px;overflow:hidden;
+  height:40px;padding:0 10px 0 12px;background:var(--panel);border-bottom:1px solid var(--stroke)}
+#bar .mark{width:20px;height:20px;border-radius:6px;flex:none;display:grid;place-items:center;
+  background:linear-gradient(135deg,var(--amber),var(--amber-lt));color:var(--on-amber)}
+#bar .name{font-size:12.5px;font-weight:650;white-space:nowrap;flex:none}
+#pill{display:flex;align-items:center;gap:6px;font-size:10.5px;font-weight:700;letter-spacing:.6px;
+  padding:4px 10px;border-radius:99px;background:var(--panel2);color:var(--faint);
+  border:1px solid var(--stroke);transition:.3s}
+#pill .led{width:6px;height:6px;border-radius:50%;background:currentColor;flex:none}
+#pill.connecting{color:var(--on-amber);background:var(--amber);border-color:var(--amber-lt)}
+#pill.on{color:var(--on-amber);background:var(--green);border-color:var(--green)}
+#pill.stopping{color:var(--on-amber);background:var(--red);border-color:var(--red)}
+#pill.connecting .led{animation:blink 1s infinite}
+@keyframes blink{50%{opacity:.25}}
+#spacer{flex:1}
+#timer{font:11px/1 Consolas,monospace;color:var(--dim);padding:5px 9px;border-radius:8px;
+  background:var(--panel2);border:1px solid var(--stroke);display:none;white-space:nowrap}
+#timer.show{display:block}
+#timer.warn{color:var(--red);border-color:rgba(232,131,111,.45)}
+.tbtn{width:30px;height:30px;border-radius:8px;border:0;background:transparent;color:var(--dim);
+  cursor:pointer;display:grid;place-items:center;flex:none;
+  transition:background .2s,color .2s,transform .2s var(--spring)}
+.tbtn:hover{background:var(--panel2);color:var(--fg)}
+.tbtn:active{transform:scale(.9)}
+@media (max-width:560px){ #bar .name{display:none} }
+#collapseBtn{display:none}
+body.expanded #collapseBtn{display:grid}
+
+/* ---------------- compact ---------------- */
+#compact{position:relative;z-index:1;flex:1;display:flex;flex-direction:column;
+  align-items:center;justify-content:center;gap:11px;padding:12px 18px}
+body.expanded #compact{display:none}
+#switchWrap{display:grid;place-items:center;position:relative}
+#switch{--sz:96px;width:var(--sz);height:var(--sz);border-radius:50%;cursor:pointer;
+  border:3px solid var(--stroke);background:var(--panel2);color:var(--dim);
+  display:grid;place-items:center;font-size:11px;font-weight:800;letter-spacing:1px;
+  transition:transform .3s var(--spring),background .35s,border-color .35s,color .35s,box-shadow .35s}
+#switch:hover{transform:translateY(-2px)}
+#switch:active{transform:scale(.94)}
+#switch.connecting{border-color:var(--amber);color:var(--amber);box-shadow:0 0 0 6px rgba(217,155,92,.10)}
+#switch.on{background:linear-gradient(150deg,var(--amber),var(--amber-dk));
+  border-color:var(--amber-lt);color:var(--on-amber);box-shadow:0 10px 30px rgba(217,155,92,.35)}
+#switch.stopping{border-color:var(--red);color:var(--red)}
+.ring{position:absolute;width:110px;height:110px;border-radius:50%;border:2px solid var(--amber);
+  opacity:0;pointer-events:none}
+.connectingRing{animation:ripple 1.8s var(--ease) infinite}
+@keyframes ripple{0%{transform:scale(.85);opacity:.55}100%{transform:scale(1.25);opacity:0}}
+#stateTxt{font-size:13px;font-weight:600}
+#subTxt{font-size:11px;color:var(--faint);min-height:15px;text-align:center;
+  max-width:340px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;user-select:text}
+#urlRow{display:none;align-items:center;gap:8px;width:100%;max-width:340px;
+  padding:7px 8px 7px 12px;border-radius:10px;background:var(--panel);border:1px solid var(--stroke)}
+#urlRow.show{display:flex;animation:pop .4s var(--spring) both}
+@keyframes pop{from{opacity:0;transform:translateY(8px)}to{opacity:1}}
+#urlTxt{flex:1;font:11px Consolas,monospace;color:var(--amber-lt);overflow:hidden;
+  text-overflow:ellipsis;white-space:nowrap;user-select:text}
+.mini{border:0;background:var(--panel2);color:var(--dim);cursor:pointer;border-radius:7px;
+  padding:5px 9px;font:10.5px/1 "Segoe UI",sans-serif;font-weight:650;transition:.2s;flex:none}
+.mini:hover{background:var(--panel3);color:var(--fg)}
+#logBox{width:100%;max-width:340px;height:74px;overflow-y:auto;padding:7px 10px;border-radius:9px;
+  background:var(--panel);border:1px solid var(--stroke);font:10px/1.5 Consolas,monospace;
+  color:var(--faint);user-select:text}
+#logBox div{white-space:pre-wrap;word-break:break-word}
+
+/* ---------------- expanded / webview ---------------- */
+#view{position:relative;z-index:1;flex:1;display:none;flex-direction:column;background:#141210}
+body.expanded #view{display:flex;animation:fade .45s var(--ease) both}
+@keyframes fade{from{opacity:0}to{opacity:1}}
+#viewbar{flex:none;display:flex;align-items:center;gap:8px;height:28px;padding:0 10px;
+  background:var(--panel);border-bottom:1px solid var(--stroke)}
+#viewbar .lock{color:var(--green);font-size:9px}
+#viewbar .u{flex:1;font:10.5px Consolas,monospace;color:var(--faint);overflow:hidden;
+  text-overflow:ellipsis;white-space:nowrap;user-select:text}
+#frame{flex:1;width:100%;border:0;background:var(--bg)}
+
+#toast{position:fixed;left:50%;bottom:22px;transform:translate(-50%,150%);z-index:60;
+  background:var(--panel2);border:1px solid var(--stroke2);border-radius:10px;
+  padding:9px 16px;font-size:12px;box-shadow:0 14px 40px rgba(0,0,0,.5);
+  transition:transform .4s var(--spring),opacity .25s,visibility 0s .4s;max-width:90%;opacity:0;visibility:hidden}
+#toast.show{transform:translate(-50%,0);opacity:1;visibility:visible;transition:transform .4s var(--spring),opacity .25s,visibility 0s}
+/* ---- first-run setup (only on a fresh install) ---- */
+#setup{position:fixed;inset:0;z-index:70;display:none;align-items:center;justify-content:center;padding:28px;
+  background:var(--bg);overflow:auto}
+body.setup #setup{display:flex}
+.sCard{width:100%;max-width:520px;background:var(--panel);border:1px solid var(--stroke);border-radius:18px;padding:30px 30px 26px;
+  box-shadow:0 30px 70px rgba(0,0,0,.45);user-select:text}
+.sStep{display:none}.sStep.on{display:block;animation:fade .35s var(--ease) both}
+.sKick{font-size:11.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--amber);font-weight:700}
+.sCard h1{font-size:23px;line-height:1.25;margin:8px 0 10px;font-weight:700}
+.sCard p{color:var(--dim);font-size:14px;margin-bottom:14px}
+.sWarn{display:flex;gap:12px;background:var(--panel2);border:1px solid var(--stroke2);border-left:3px solid var(--amber);
+  border-radius:12px;padding:14px 16px;margin:14px 0 18px;font-size:13.5px;color:var(--fg)}
+.sWarn b{color:var(--amber)}
+.sList{list-style:none;counter-reset:s;display:grid;gap:10px;margin:0 0 20px}
+.sList li{counter-increment:s;display:flex;gap:12px;align-items:flex-start;font-size:14px;color:var(--dim)}
+.sList li::before{content:counter(s);flex:none;width:24px;height:24px;border-radius:50%;background:var(--panel3);color:var(--fg);
+  display:grid;place-items:center;font-size:12px;font-weight:700}
+.sList a{color:var(--amber);cursor:pointer;text-decoration:underline}
+.sBtns{display:flex;gap:10px;flex-wrap:wrap}
+.sBtn{border:0;border-radius:12px;padding:12px 18px;font-weight:600;font-size:14px;font-family:inherit;cursor:pointer;
+  background:var(--amber);color:var(--on-amber);transition:transform .2s var(--spring),opacity .2s}
+.sBtn:hover{transform:translateY(-1px)}.sBtn:disabled{opacity:.5;cursor:default;transform:none}
+.sBtn.ghost{background:var(--panel3);color:var(--fg)}
+.sMsg{margin-top:14px;font-size:13px;color:var(--dim);min-height:20px}
+.sMsg.err{color:var(--red)}
+</style>
+</head>
+<body>
+<div id="glow"><i></i><i></i></div>
+
+<!-- The window itself is a normal framed Windows window: the OS draws the title bar,
+     the min/max/close buttons, the resize borders and handles drag/snap/shake.
+     This bar is plain page content - status only, no fake chrome. -->
+<div id="bar">
+  <div class="mark"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M12 3l1.9 5.6L19.5 10l-5.6 1.9L12 17.5l-1.9-5.6L4.5 10l5.6-1.4z"/></svg></div>
+  <div class="name">Qwen Control</div>
+  <div id="pill"><span class="led"></span><span id="pillTxt">OFF</span></div>
+  <div id="spacer"></div>
+  <div id="timer" title="Safety timer - the session stops itself when this runs out">04:00:00</div>
+  <button class="tbtn" id="collapseBtn" title="Collapse to the control bar (session keeps running)">
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3v6H3M15 21v-6h6"/><path d="M3 9l7-7M21 15l-7 7"/></svg></button>
+</div>
+
+<div id="compact">
+  <div id="switchWrap">
+    <span class="ring" id="ring"></span>
+    <button id="switch"><span id="switchTxt">OFF</span></button>
+  </div>
+  <div id="stateTxt">Tap to start the server</div>
+  <div id="subTxt"></div>
+  <div id="urlRow">
+    <span id="urlTxt"></span>
+    <button class="mini" id="copyUrl">copy</button>
+    <button class="mini" id="copyKey">key</button>
+    <button class="mini" id="expandBtn">open</button>
+  </div>
+  <div id="logBox"></div>
+</div>
+
+<div id="view">
+  <div id="viewbar">
+    <span class="lock">●</span>
+    <span class="u" id="viewUrl"></span>
+    <button class="mini" id="reloadBtn">reload</button>
+    <button class="mini" id="extBtn">browser</button>
+  </div>
+  <iframe id="frame" allow="clipboard-write; autoplay"></iframe>
+</div>
+
+<div id="setup" role="dialog" aria-labelledby="sTitle">
+  <div class="sCard">
+    <div class="sStep on" id="s1">
+      <div class="sKick">Welcome to Qwen Studio</div>
+      <h1 id="sTitle">Your own private AI, on Kaggle's free GPUs</h1>
+      <p>Qwen runs in <b>your</b> Kaggle account, using the free GPU hours Kaggle gives every user (about 30 hours a week).</p>
+      <div class="sWarn"><span>⚠️</span><div><b>Before you continue:</b> you need a free <b>Kaggle account</b> with a <b>verified phone number</b>. Kaggle only gives GPUs to phone-verified accounts.</div></div>
+      <ol class="sList">
+        <li><span>No account yet? <a data-url="https://www.kaggle.com/account/login?phase=startRegisterTab">Create a free Kaggle account</a></span></li>
+        <li><span>Then <a data-url="https://www.kaggle.com/settings">verify your phone number</a> (Settings → Phone verification)</span></li>
+      </ol>
+      <div class="sBtns">
+        <button class="sBtn" id="sHave">I have a verified Kaggle account →</button>
+      </div>
+    </div>
+    <div class="sStep" id="s2">
+      <div class="sKick">Step 2 of 2</div>
+      <h1>Connect your Kaggle account</h1>
+      <p>Your browser will open Kaggle. Sign in if asked, then click <b>Allow</b>. That's all — come back here afterwards.</p>
+      <div class="sBtns">
+        <button class="sBtn" id="sSignin">Sign in with Kaggle</button>
+        <button class="sBtn ghost" id="sBack">Back</button>
+      </div>
+      <div class="sMsg" id="sMsg"></div>
+    </div>
+    <div class="sStep" id="s3">
+      <div class="sKick">All set</div>
+      <h1>Connected as <span id="sUser"></span> 🎉</h1>
+      <p>Press the big switch to start your server. The first start takes about 6 minutes while Kaggle downloads the model. After that, just chat.</p>
+      <div class="sBtns"><button class="sBtn" id="sDone">Start using Qwen</button></div>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+const $ = s => document.querySelector(s);
+let MODE = 'off', URL_ = '', deadline = 0, framed = '', FRAME_URL = '';
+
+function toast(t){
+  const el = $('#toast'); el.textContent = t; el.classList.add('show');
+  clearTimeout(el._t); el._t = setTimeout(() => el.classList.remove('show'), 2200);
+}
+function api(){ return (window.pywebview && window.pywebview.api) || null; }
+function call(fn, ...a){
+  const A = api();
+  if(!A){ toast('backend not ready'); return Promise.resolve(null); }
+  return A[fn](...a).catch(e => { toast('error: ' + e); return null; });
+}
+function hhmmss(s){
+  s = Math.max(0, Math.floor(s));
+  const h = Math.floor(s/3600), m = Math.floor(s%3600/60), x = s%60;
+  return [h,m,x].map(n => String(n).padStart(2,'0')).join(':');
+}
+function paintTimer(){
+  const t = $('#timer');
+  if(!deadline){ t.classList.remove('show','warn'); return; }
+  const left = deadline - Date.now()/1000;
+  t.classList.add('show');
+  t.textContent = hhmmss(left);
+  t.classList.toggle('warn', left <= 300);
+}
+setInterval(paintTimer, 1000);
+
+/* ---- called FROM python ---- */
+window.pushLog = function(line){
+  const b = $('#logBox');
+  const d = document.createElement('div'); d.textContent = line;
+  b.appendChild(d); b.scrollTop = b.scrollHeight;
+  while(b.childElementCount > 400) b.removeChild(b.firstChild);
+};
+window.pushState = function(st){
+  MODE = st.mode; URL_ = st.url || '';
+  if(st.frameUrl) FRAME_URL = st.frameUrl;
+  deadline = st.deadline || 0;
+  const pill = $('#pill'), sw = $('#switch');
+  pill.className = ''; sw.className = '';
+  $('#ring').classList.remove('connectingRing');
+  $('#urlRow').classList.toggle('show', !!URL_);
+  $('#urlTxt').textContent = URL_;
+  $('#viewUrl').textContent = URL_;
+  $('#stateTxt').textContent = st.status || '';
+  $('#subTxt').textContent = st.sub || '';
+  paintTimer();
+
+  if(MODE === 'off'){
+    $('#pillTxt').textContent = 'OFF'; $('#switchTxt').textContent = 'OFF';
+    setExpanded(false);
+    // session is gone: drop the latched page so the NEXT session (same fixed URL)
+    // reloads instead of showing the dead session's chat
+    framed = ''; FRAME_URL = '';
+    if($('#frame').src && $('#frame').src !== 'about:blank') $('#frame').src = 'about:blank';
+  } else if(MODE === 'connecting'){
+    pill.className = 'connecting'; sw.className = 'connecting';
+    $('#ring').classList.add('connectingRing');
+    $('#pillTxt').textContent = 'CONNECTING'; $('#switchTxt').textContent = '•••';
+  } else if(MODE === 'on'){
+    pill.className = 'on'; sw.className = 'on';
+    $('#pillTxt').textContent = 'READY'; $('#switchTxt').textContent = 'ON';
+    if(st.expand) setExpanded(true);
+  } else if(MODE === 'stopping'){
+    pill.className = 'stopping'; sw.className = 'stopping';
+    $('#pillTxt').textContent = 'STOPPING'; $('#switchTxt').textContent = '•••';
+    setExpanded(false);
+  }
+};
+window.showToast = t => toast(t);
+
+/* ---- expand / collapse ----
+   Python decides whether to resize the window (only on real transitions, never on a
+   maximised window), so this swaps panels and loads the frame. set_expanded is only
+   called when the state actually CHANGES - calling it on every state push was
+   snap-resizing the window and clobbering sizes the user set with the native border. */
+async function setExpanded(on){
+  on = !!on;
+  if(on && (MODE !== 'on' || !URL_)) return;   // never latch a login/503 page mid-boot
+  const was = document.body.classList.contains('expanded');
+  document.body.classList.toggle('expanded', on);
+  if(on !== was) call('set_expanded', on);     // resize first - never behind a network await
+  if(on && framed !== URL_){
+    framed = URL_;
+    // prefer the URL python pre-computed; ask only if we expanded on our own
+    let src = FRAME_URL;
+    FRAME_URL = '';
+    if(!src){ src = (await call('frame_url')) || URL_; }
+    $('#frame').src = src || URL_;
+  }
+}
+$('#collapseBtn').onclick = () => { setExpanded(false); toast('Collapsed — session still running'); };
+$('#expandBtn').onclick = () => setExpanded(true);
+
+/* ---- actions ---- */
+$('#switch').onclick = () => {
+  if(MODE === 'off') call('start');
+  else if(MODE === 'on') call('stop');
+  else if(MODE === 'connecting') call('cancel');
+};
+$('#copyUrl').onclick = () => { navigator.clipboard.writeText(URL_); toast('URL copied'); };
+$('#copyKey').onclick = () => call('copy_key').then(() => toast('API key copied'));
+$('#extBtn').onclick = () => call('open_external');
+$('#reloadBtn').onclick = async () => {
+  if(MODE !== 'on') return;                    // nothing sane to reload mid-boot
+  const f = $('#frame'); f.src = 'about:blank';
+  const src = (await call('frame_url')) || URL_;
+  setTimeout(() => f.src = src, 60);
+};
+
+/* ---- theme ----
+   The theme is chosen in the web UI's Settings -> Style; the embedded page
+   tells us about it so the app content matches. */
+function applyTheme(t){
+  document.documentElement.dataset.theme = (t === 'black' ? 'black' : '');
+}
+window.applyTheme = applyTheme;
+window.addEventListener('message', ev => {
+  const t = ev.data && ev.data.qwenTheme;
+  if(t === 'black' || t === 'dark' || t === 'light'){
+    applyTheme(t === 'black' ? 'black' : 'warm');
+    call('save_theme', t === 'black' ? 'black' : 'warm');
+  }
+});
+
+/* ---- first-run setup ---- */
+function sShow(n){ ['s1','s2','s3'].forEach(id => $('#'+id).classList.toggle('on', id === 's'+n)); }
+document.querySelectorAll('#setup a[data-url]').forEach(a => a.onclick = () => call('open_url', a.dataset.url));
+$('#sHave').onclick = () => sShow(2);
+$('#sBack').onclick = () => sShow(1);
+$('#sSignin').onclick = async () => {
+  const b = $('#sSignin'), m = $('#sMsg');
+  b.disabled = true; m.className = 'sMsg'; m.textContent = 'Waiting for you to click Allow in the browser…';
+  const r = await call('kaggle_signin');
+  if(!r || !r.ok){ b.disabled = false; m.className = 'sMsg err'; m.textContent = 'Sign-in did not finish. ' + ((r && r.error) || '') + ' Try again.'; return; }
+  m.textContent = 'Signed in as ' + r.user + '. Setting up your private server…';
+  const f = await call('finish_setup');
+  b.disabled = false;
+  if(!f || !f.ok){ m.className = 'sMsg err'; m.textContent = (f && f.error) || 'Setup failed. Try again.'; return; }
+  $('#sUser').textContent = f.user; sShow(3);
+};
+$('#sDone').onclick = () => { document.body.classList.remove('setup'); call('set_expanded', false); };
+
+window.addEventListener('pywebviewready', async () => {
+  const st = await call('setup_state');
+  if(st && st.needs){ document.body.classList.add('setup'); call('set_expanded', true); }
+  call('ready');
+});
+</script>
+</body>
+</html>
